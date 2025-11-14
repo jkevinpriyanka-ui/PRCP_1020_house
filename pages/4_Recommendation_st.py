@@ -1,30 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import ElasticNet
+import joblib
 import plotly.express as px
 
-st.title("🏠 House Recommendations")
+st.set_page_config(
+    page_title="Recommendations",
+    page_icon="🏡",
+    layout="wide"
+)
 
-# Load CSV
-df = pd.read_csv("house_data_with_predictions.csv")
+st.title("🏡 House Recommendations")
 
-# pipeline
-numeric_features = ['OverallQual', 'GrLivArea', 'GarageCars', 'TotalBsmtSF', 'YearBuilt']
-categorical_features = ['Neighborhood']
+csv_path = "./house_data_with_predictions.csv"
+pipeline_path = "./best_pipeline.joblib"
 
-preprocessor = ColumnTransformer([
-    ('num', StandardScaler(), numeric_features),
-    ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-])
-model = Pipeline([('preprocessor', preprocessor), ('regressor', ElasticNet(alpha=0.1, l1_ratio=0.5))])
-
-X = df[numeric_features + categorical_features]
-y = np.log1p(df['SalePrice'])
-model.fit(X, y)
+df = pd.read_csv(csv_path)
+best_enet = joblib.load(pipeline_path)
 
 # Sidebar filters
 st.sidebar.header("Filter Houses")
@@ -33,26 +25,31 @@ min_quality = st.sidebar.slider("Minimum Overall Quality", 1, 10, 5)
 neighborhood_options = ['All'] + sorted(df['Neighborhood'].unique())
 neighborhood = st.sidebar.selectbox("Select Neighborhood", neighborhood_options)
 
+# Filter data
 filtered_df = df.copy()
 if neighborhood != 'All':
-    filtered_df = filtered_df[filtered_df['Neighborhood'] == neighborhood]
-filtered_df = filtered_df[(filtered_df['SalePrice'] <= max_price) & (filtered_df['OverallQual'] >= min_quality)]
+    filtered_df = filtered_df[filtered_df['Neighborhood']==neighborhood]
+filtered_df = filtered_df[(filtered_df['SalePrice']<=max_price) & (filtered_df['OverallQual']>=min_quality)]
 
-# Predict filtered houses
-X_filtered = filtered_df[numeric_features + categorical_features]
-filtered_df['PredictedPrice'] = np.expm1(model.predict(X_filtered))
-filtered_df['DiffPercent'] = ((filtered_df['PredictedPrice'] - filtered_df['SalePrice']) / filtered_df['SalePrice']) * 100
+# Recalculate predictions
+X_cols = [c for c in df.columns if c not in ['SalePrice','PredictedPrice','DiffPercent']]
+filtered_df['PredictedPrice_New'] = np.expm1(best_enet.predict(filtered_df[X_cols]))
+filtered_df['DiffPercent_New'] = ((filtered_df['PredictedPrice_New']-filtered_df['SalePrice'])/filtered_df['SalePrice'])*100
 
 # Top 5 deals
-top_deals = filtered_df.sort_values('DiffPercent', ascending=False).head(5)
+top_deals = filtered_df.sort_values('DiffPercent_New', ascending=False).head(5)
 st.subheader("Top 5 Recommended Houses")
-st.dataframe(top_deals[['Neighborhood','OverallQual','GrLivArea','GarageCars','TotalBsmtSF','YearBuilt','SalePrice','PredictedPrice','DiffPercent']])
+st.dataframe(top_deals[['Neighborhood','OverallQual','GrLivArea','GarageCars','TotalBsmtSF','YearBuilt','SalePrice','PredictedPrice_New','DiffPercent_New']])
 
-# Filtered Actual vs Predicted
-st.subheader("Predicted vs Sale Price - Filtered Houses")
-fig = px.scatter(filtered_df, x='SalePrice', y='PredictedPrice', color='Neighborhood',
-                 size='OverallQual', hover_data=numeric_features + ['YearBuilt'])
-fig.add_shape(type="line", line=dict(color='red', dash='dash'),
-              x0=filtered_df['SalePrice'].min(), x1=filtered_df['SalePrice'].max(),
-              y0=filtered_df['SalePrice'].min(), y1=filtered_df['SalePrice'].max())
+#plot
+st.subheader("Filtered Actual vs Predicted Prices")
+fig = px.scatter(filtered_df, x='SalePrice', y='PredictedPrice_New', color='Neighborhood', size='OverallQual',
+                 hover_data=['GrLivArea','GarageCars','TotalBsmtSF','YearBuilt'], 
+                 labels={'SalePrice':'Actual Price','PredictedPrice_New':'Predicted Price'})
+fig.add_shape(
+    type="line", x0=filtered_df['SalePrice'].min(), x1=filtered_df['SalePrice'].max(),
+    y0=filtered_df['SalePrice'].min(), y1=filtered_df['SalePrice'].max(),
+    line=dict(color='red', dash='dash')
+)
+fig.update_layout(template="plotly_white", height=600, title_x=0.5)
 st.plotly_chart(fig, use_container_width=True)

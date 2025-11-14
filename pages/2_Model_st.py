@@ -1,50 +1,60 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import joblib
 import plotly.express as px
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import ElasticNet
 
-st.title("📊 Model Insights")
+st.set_page_config(
+    page_title="Model Insights",
+    page_icon="📈",
+    layout="wide"
+)
 
-df = pd.read_csv("house_data_with_predictions.csv")
+st.title("📈 Model Insights")
 
-numeric_features = ['OverallQual', 'GrLivArea', 'GarageCars', 'TotalBsmtSF', 'YearBuilt']
-categorical_features = ['Neighborhood']
+csv_path = "./house_data_with_predictions.csv"
+pipeline_path = "./best_pipeline.joblib"
 
-# pipeline
-preprocessor = ColumnTransformer([
-    ('num', StandardScaler(), numeric_features),
-    ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-])
-model = Pipeline([
-    ('preprocessor', preprocessor),
-    ('regressor', ElasticNet(alpha=0.1, l1_ratio=0.5))
-])
+df = pd.read_csv(csv_path)
+best_enet = joblib.load(pipeline_path)
 
-X = df[numeric_features + categorical_features]
-y = np.log1p(df['SalePrice'])  # log-transform
-model.fit(X, y)
-
-# Predictions
-df['PredictedPrice'] = np.expm1(model.predict(X))
-
-# Actual vs Predicted
+# --- Actual vs Predicted Prices ---
 st.subheader("Actual vs Predicted Prices")
-fig = px.scatter(df, x='SalePrice', y='PredictedPrice', hover_data=['Neighborhood', 'GrLivArea'])
-fig.add_shape(type="line", line=dict(dash="dash", color="red"),
-              x0=df['SalePrice'].min(), x1=df['SalePrice'].max(),
-              y0=df['SalePrice'].min(), y1=df['SalePrice'].max())
+fig = px.scatter(df, x='SalePrice', y='PredictedPrice', hover_data=['Neighborhood','GrLivArea'],
+                 title="Actual vs Predicted Prices")
+fig.add_shape(
+    type="line", line=dict(dash="dash", color="red"),
+    x0=df['SalePrice'].min(), x1=df['SalePrice'].max(),
+    y0=df['SalePrice'].min(), y1=df['SalePrice'].max()
+)
 st.plotly_chart(fig, use_container_width=True)
 
-# Top 10 influential features
+# --- Top 10 Features (ElasticNet Coefficients) ---
 st.subheader("Top 10 Influential Features")
-feature_names = numeric_features + list(model.named_steps['preprocessor'].named_transformers_['cat'].get_feature_names_out(categorical_features))
-coefs = model.named_steps['regressor'].coef_
+
+preprocessor = best_enet.named_steps['preprocessor']
+model = best_enet.named_steps['model']
+
+# Get feature names
+try:
+    feature_names = preprocessor.get_feature_names_out()
+except:
+    feature_names = []
+    for name, trans, cols in preprocessor.transformers_:
+        if name != 'remainder':
+            if hasattr(trans, 'get_feature_names_out'):
+                feature_names.extend(trans.get_feature_names_out(cols))
+            else:
+                feature_names.extend(cols)
+        else:
+            feature_names.extend(cols)
+
+feature_names = [f.split("__")[-1] if "__" in f else f for f in feature_names]
+
+coefs = model.coef_ if hasattr(model, 'coef_') else np.zeros(len(feature_names))
 feat_imp = pd.DataFrame({'Feature': feature_names, 'Coefficient': coefs, 'AbsCoeff': np.abs(coefs)})
 top10 = feat_imp.sort_values('AbsCoeff', ascending=False).head(10)
-fig2 = px.bar(top10, x='AbsCoeff', y='Feature', orientation='h', color='AbsCoeff', title="Top 10 Features")
+
+fig2 = px.bar(top10, x='AbsCoeff', y='Feature', orientation='h', title="Top 10 Features - ElasticNet", color='AbsCoeff')
 fig2.update_yaxes(categoryorder='total ascending')
 st.plotly_chart(fig2, use_container_width=True)
