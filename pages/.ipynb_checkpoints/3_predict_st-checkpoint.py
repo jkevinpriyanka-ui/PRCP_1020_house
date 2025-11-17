@@ -10,7 +10,7 @@ st.set_page_config(page_title="Predict", layout="wide")
 st.title("🔮 Predict House Price")
 
 # Load data
-df =pd.read_csv("house_data_with_predictions.csv")
+df = pd.read_csv("house_app_files/house_data_with_predictions.csv")
 
 # Features
 numeric_features = ['OverallQual', 'GrLivArea', 'GarageCars', 'TotalBsmtSF', 'YearBuilt']
