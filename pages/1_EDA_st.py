@@ -1,45 +1,95 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import numpy as np
+import plotly.express as px
 
-st.set_page_config(page_title="EDA", page_icon="📊")
-st.title("Exploratory Data Analysis")
+st.set_page_config(
+    page_title="EDA - Housing Analysis",
+    page_icon="📊",
+    layout="wide"
+)
 
-# Load data
-df = pd.read_csv("house_data_with_predictions.csv")
+st.title("📊 Exploratory Data Analysis (EDA)")
 
-# SalePrice distribution
-st.subheader("SalePrice Distribution")
-fig = px.histogram(df, x='SalePrice', nbins=50, title="SalePrice Distribution")
-st.plotly_chart(fig, use_container_width=True)
+@st.cache_data
+def load_data():
+    return pd.read_csv("house_data_with_predictions.csv")
 
-# Buttons for correlation
-st.subheader("Top Features Correlated with SalePrice")
+df = load_data()
+
+st.success("Data Loaded Successfully!")
+
+
+st.subheader("Dataset Preview")
+st.dataframe(df.head(), use_container_width=True)
+
+# SalePrice Distribution
+st.subheader("House Sale Price Distribution")
+
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("Original SalePrice"):
-        corr = df.corr()['SalePrice'].sort_values(ascending=False)[1:11]
-        corr_df = corr.reset_index().rename(columns={'index':'Feature', 'SalePrice':'Correlation'})
-        fig_corr = px.bar(corr_df, x='Feature', y='Correlation', color='Correlation', title="Top 10 Correlated Features")
-        st.plotly_chart(fig_corr, use_container_width=True)
+    fig = px.histogram(df, x="SalePrice", nbins=50,
+                       title="SalePrice Distribution")
+    st.plotly_chart(fig, use_container_width=True)
 
 with col2:
-    if st.button("Log-Transformed SalePrice"):
-        # Log-transform SalePrice
-        df_log = df.copy()
-        df_log['LogSalePrice'] = np.log1p(df_log['SalePrice'])
-        
-        # Log-transform numeric features if skewed
-        numeric_cols = df_log.select_dtypes(include=['int64','float64']).columns
-        skew_thresh = 1
-        skewed_features = df_log[numeric_cols].skew().abs() > skew_thresh
-        for col in numeric_cols:
-            if skewed_features[col]:
-                df_log[col] = np.log1p(df_log[col])
-        
-        corr_log = df_log.corr()['LogSalePrice'].sort_values(ascending=False)[1:11]
-        corr_log_df = corr_log.reset_index().rename(columns={'index':'Feature', 'LogSalePrice':'Correlation'})
-        fig_log = px.bar(corr_log_df, x='Feature', y='Correlation', color='Correlation', title="Top 10 Correlated Features (Log-Transformed)")
-        st.plotly_chart(fig_log, use_container_width=True)
+    df_log = df.copy()
+    df_log["LogSalePrice"] = np.log1p(df["SalePrice"])
+    fig_log = px.histogram(df_log, x="LogSalePrice", nbins=50,
+                           title="Log-Transformed SalePrice")
+    st.plotly_chart(fig_log, use_container_width=True)
+
+# Correlation Section
+st.subheader("🔗 Feature Correlations with SalePrice")
+
+# Buttons
+option = st.radio(
+    "Select Correlation Type:",
+    ["Normal Correlation", "Log-Transformed Correlation"]
+)
+
+numeric_df = df.select_dtypes(include=["int64", "float64"])
+
+if option == "Normal Correlation":
+    corr = numeric_df.corr()['SalePrice'].sort_values(ascending=False)[1:11]
+    corr_df = corr.reset_index().rename(
+        columns={'index': 'Feature', 'SalePrice': 'Correlation'}
+    )
+    title = "Top 10 Correlated Features (SalePrice)"
+
+else:
+    df_log = df.copy()
+    df_log["LogSalePrice"] = np.log1p(df_log["SalePrice"])
+    numeric_log_df = df_log.select_dtypes(include=["int64", "float64"])
+    corr = numeric_log_df.corr()['LogSalePrice'].sort_values(ascending=False)[1:10]
+    corr_df = corr.reset_index().rename(
+        columns={'index': 'Feature', 'LogSalePrice': 'Correlation'}
+    )
+    title = "Top 10 Correlated Features (LogSalePrice)"
+
+# Plot correlation
+fig_corr = px.bar(
+    corr_df,
+    x="Feature",
+    y="Correlation",
+    title=title,
+    color="Correlation"
+)
+st.plotly_chart(fig_corr, use_container_width=True)
+
+# Categorical Analysis
+st.subheader("Categorical Feature Analysis")
+
+cat_cols = df.select_dtypes(include=['object']).columns.tolist()
+
+if len(cat_cols) > 0:
+    selected_cat = st.selectbox("Select a Categorical Column:", cat_cols)
+    
+    fig_cat = px.box(df, x=selected_cat, y="SalePrice",
+                     title=f"SalePrice vs {selected_cat}")
+    st.plotly_chart(fig_cat, use_container_width=True)
+else:
+    st.info("No categorical columns found.")
+
+st.info("✔ EDA page loaded successfully.")
