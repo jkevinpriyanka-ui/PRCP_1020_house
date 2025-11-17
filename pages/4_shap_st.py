@@ -44,11 +44,11 @@ ohe = preprocessor.named_transformers_['cat']
 feature_names = list(num_cols) + list(ohe.get_feature_names_out(cat_cols))
 
 @st.cache_data
-def compute_shap(model_step, X_transformed):
+def compute_shap(model, X_transformed):
     explainer = shap.Explainer(model_step, X_transformed)
     return explainer(X_transformed)
 
-shap_values = compute_shap(model_step, X_sample_transformed)
+shap_values = compute_shap(model, X_sample_transformed)
 
 st.subheader("SHAP Summary Plot (Global Feature Importance)")
 fig_summary = plt.figure(figsize=(10, 6))
@@ -74,6 +74,6 @@ st.pyplot(fig_waterfall)
 st.subheader("🔹 Original Data and Predicted Price")
 st.write(single_row)
 
-pred_log = model_step.predict(single_transformed)[0]
+pred_log = model.predict(single_transformed)[0]
 pred_price = np.expm1(pred_log)
 st.success(f"Predicted Sale Price: ${pred_price:,.0f}")
