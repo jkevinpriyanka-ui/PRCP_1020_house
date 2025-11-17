@@ -24,43 +24,38 @@ st.success("✅ Data Loaded Successfully!")
 
 try:
     with open(pipeline_path, "rb") as f:
-        model = cloudpickle.load(f)
+        pipeline = cloudpickle.load(f)
     st.info("✅ Loaded saved pipeline")
 except Exception as e:
     st.error(f"Failed to load pipeline: {e}")
     st.stop()
 
-preprocessor = model.named_steps['preprocessor']
-regressor = model.named_steps['regressor']
+preprocessor = pipeline.named_steps['preprocessor']
+model = pipeline.named_steps['model']  
 
 num_cols = preprocessor.transformers_[0][2]
 cat_cols = preprocessor.transformers_[1][2]
 
 X = df[num_cols.tolist() + cat_cols.tolist()]
-
 X_sample = X.sample(min(200, len(X)), random_state=42)
 X_sample_transformed = to_dense(preprocessor.transform(X_sample))
 
-#Feature names 
 ohe = preprocessor.named_transformers_['cat']
 feature_names = list(num_cols) + list(ohe.get_feature_names_out(cat_cols))
 
-
 @st.cache_data
-def compute_shap(model, X_transformed):
-    explainer = shap.Explainer(model, X_transformed)
+def compute_shap(model_step, X_transformed):
+    explainer = shap.Explainer(model_step, X_transformed)
     return explainer(X_transformed)
 
-shap_values = compute_shap(regressor, X_sample_transformed)
+shap_values = compute_shap(model_step, X_sample_transformed)
 
-# SHAP Summary Plot 
-st.subheader(" SHAP Summary Plot (Global Feature Importance)")
+st.subheader("SHAP Summary Plot (Global Feature Importance)")
 fig_summary = plt.figure(figsize=(10, 6))
 shap.summary_plot(shap_values, X_sample_transformed, feature_names=feature_names, show=False)
 st.pyplot(fig_summary)
 
-#  Single prediction explanation 
-st.subheader(" SHAP Waterfall Plot (Single Prediction Explanation)")
+st.subheader("SHAP Waterfall Plot (Single Prediction Explanation)")
 selected_idx = st.number_input(
     "Select a row index to explain:",
     min_value=0,
@@ -70,16 +65,15 @@ selected_idx = st.number_input(
 
 single_row = X.iloc[[selected_idx]]
 single_transformed = to_dense(preprocessor.transform(single_row))
-shap_single = shap.Explainer(regressor, X_sample_transformed)(single_transformed)
+shap_single = shap.Explainer(model_step, X_sample_transformed)(single_transformed)
 
 fig_waterfall = plt.figure(figsize=(10, 6))
 shap.plots.waterfall(shap_single[0], show=False)
 st.pyplot(fig_waterfall)
 
-# Display original data and prediction 
 st.subheader("🔹 Original Data and Predicted Price")
 st.write(single_row)
 
-pred_log = regressor.predict(single_transformed)[0]
+pred_log = model_step.predict(single_transformed)[0]
 pred_price = np.expm1(pred_log)
 st.success(f"Predicted Sale Price: ${pred_price:,.0f}")
