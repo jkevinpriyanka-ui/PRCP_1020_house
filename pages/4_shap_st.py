@@ -10,7 +10,8 @@ st.title("🔍 SHAP Model Explainability")
 
 # --- File paths ---
 csv_path = "house_app_files/house_data_with_predictions.csv"
-pipeline_path = "house_app_files/best_pipeline.pkl"  # cloudpickle saved pipeline
+pipeline_path = "house_app_files/best_pipeline.pkl"
+
 
 # --- Load data ---
 @st.cache_data

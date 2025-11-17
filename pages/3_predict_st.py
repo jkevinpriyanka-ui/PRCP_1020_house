@@ -10,7 +10,7 @@ st.title("🔮 Predict House Price")
 csv_path = "house_app_files/house_data_with_predictions.csv"
 df = pd.read_csv(csv_path)
 
-pipeline_path = "house_app_files/pipeline.pkl"
+pipeline_path = "house_app_files/best_pipeline.pkl"
 with open(pipeline_path, "rb") as f:
     model = cloudpickle.load(f)
 
