@@ -13,7 +13,7 @@ st.title("📊 Exploratory Data Analysis (EDA)")
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("house_data_with_predictions.csv")
+    return pd.read_csv("house_app_files/house_data_with_predictions.csv")
 
 df = load_data()
 

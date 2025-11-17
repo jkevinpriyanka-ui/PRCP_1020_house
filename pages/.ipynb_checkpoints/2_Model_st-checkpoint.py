@@ -12,9 +12,8 @@ st.set_page_config(
 
 st.title("📈 Model Insights")
 
-csv_path = "./house_data_with_predictions.csv"
-pipeline_path = "house_pred_files/best_pipeline.joblib"
-
+csv_path = "house_app_files/house_data_with_predictions.csv"
+pipeline_path = "house_app_files/best_pipeline.joblib"
 
 df = pd.read_csv(csv_path)
 best_enet = joblib.load(pipeline_path)
