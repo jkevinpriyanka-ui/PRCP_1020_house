@@ -3,23 +3,23 @@ import pandas as pd
 import numpy as np
 import cloudpickle
 import os
-
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import ElasticNet
 
-st.set_page_config(page_title="Predict", layout="wide")
+st.set_page_config(page_title="Predict House Price", layout="wide")
 st.title("🔮 Predict House Price")
 
+# --- Load data ---
 csv_path = "house_app_files/house_data_with_predictions.csv"
 df = pd.read_csv(csv_path)
 
-# Features for prediction
+# --- Features ---
 numeric_features = ['OverallQual', 'GrLivArea', 'GarageCars', 'TotalBsmtSF', 'YearBuilt']
 categorical_features = ['Neighborhood']
 
-# Load or train pipeline
+# --- Load or train pipeline ---
 pipeline_path = "house_app_files/best_pipeline.pkl"
 if os.path.exists(pipeline_path):
     with open(pipeline_path, "rb") as f:
@@ -46,39 +46,26 @@ else:
         cloudpickle.dump(model, f)
     st.success("✅ Pipeline trained and saved")
 
-# Sidebar: User input
+# --- Sidebar: User input ---
 st.sidebar.header("Set Feature Values")
 input_data = {}
-
-# Numeric sliders
 for f in numeric_features:
     min_val, max_val = int(df[f].min()), int(df[f].max())
     default_val = int(df[f].median())
-    # Adjust step for large ranges
     step = 1 if max_val < 50 else 50 if max_val > 1000 else 10
     input_data[f] = st.sidebar.slider(f, min_val, max_val, default_val, step=step)
 
-# Categorical selectbox
 input_data['Neighborhood'] = st.sidebar.selectbox(
     "Neighborhood", sorted(df['Neighborhood'].unique())
 )
 
-# Convert to DataFrame
 input_df = pd.DataFrame([input_data])
 
-try:
-    expected_features = model.named_steps['preprocessor'].get_feature_names_out()
-except:
-    # Fallback for older sklearn versions
-    expected_features = numeric_features + list(model.named_steps['preprocessor'].named_transformers_['cat']['encoder'].get_feature_names_out(categorical_features))
-
-for col in expected_features:
-    if col not in input_df.columns:
-        input_df[col] = 0
-
-# Predict
+# --- Predict ---
 pred_price = np.expm1(model.predict(input_df)[0])
 
-# Display prediction
+# --- Display ---
 st.subheader("Predicted House Price")
 st.success(f"${pred_price:,.0f}")
+st.write("### Input Features")
+st.table(input_df)
