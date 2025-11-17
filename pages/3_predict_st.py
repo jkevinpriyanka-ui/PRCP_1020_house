@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import cloudpickle
+import os
+
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import ElasticNet
-import os
 
 st.set_page_config(page_title="Predict", layout="wide")
 st.title("🔮 Predict House Price")
@@ -14,18 +15,18 @@ st.title("🔮 Predict House Price")
 csv_path = "house_app_files/house_data_with_predictions.csv"
 df = pd.read_csv(csv_path)
 
-# Features for prediction 
+# Features for prediction
 numeric_features = ['OverallQual', 'GrLivArea', 'GarageCars', 'TotalBsmtSF', 'YearBuilt']
 categorical_features = ['Neighborhood']
 
-# Load or retrain pipeline
+# Load or train pipeline
 pipeline_path = "house_app_files/best_pipeline.pkl"
 if os.path.exists(pipeline_path):
     with open(pipeline_path, "rb") as f:
         model = cloudpickle.load(f)
     st.info("✅ Loaded saved pipeline")
 else:
-    st.warning("⚠ Pipeline not found, training a new one...")
+    st.warning("Pipeline not found, training a new one...")
     X_train = df[numeric_features + categorical_features]
     y_train = np.log1p(df['SalePrice'])
 
@@ -40,13 +41,12 @@ else:
     ])
 
     model.fit(X_train, y_train)
-    # Save pipeline for future
     os.makedirs("house_app_files", exist_ok=True)
     with open(pipeline_path, "wb") as f:
         cloudpickle.dump(model, f)
     st.success("✅ Pipeline trained and saved")
 
-# Sidebar for user inputs 
+# Sidebar: User input
 st.sidebar.header("Set Feature Values")
 input_data = {}
 
@@ -54,7 +54,9 @@ input_data = {}
 for f in numeric_features:
     min_val, max_val = int(df[f].min()), int(df[f].max())
     default_val = int(df[f].median())
-    input_data[f] = st.sidebar.slider(f, min_val, max_val, default_val, step=1)
+    # Adjust step for large ranges
+    step = 1 if max_val < 50 else 50 if max_val > 1000 else 10
+    input_data[f] = st.sidebar.slider(f, min_val, max_val, default_val, step=step)
 
 # Categorical selectbox
 input_data['Neighborhood'] = st.sidebar.selectbox(
@@ -64,9 +66,19 @@ input_data['Neighborhood'] = st.sidebar.selectbox(
 # Convert to DataFrame
 input_df = pd.DataFrame([input_data])
 
-#  Predict
+try:
+    expected_features = model.named_steps['preprocessor'].get_feature_names_out()
+except:
+    # Fallback for older sklearn versions
+    expected_features = numeric_features + list(model.named_steps['preprocessor'].named_transformers_['cat']['encoder'].get_feature_names_out(categorical_features))
+
+for col in expected_features:
+    if col not in input_df.columns:
+        input_df[col] = 0
+
+# Predict
 pred_price = np.expm1(model.predict(input_df)[0])
 
-# --- Display prediction ---
+# Display prediction
 st.subheader("Predicted House Price")
 st.success(f"${pred_price:,.0f}")

@@ -9,11 +9,9 @@ from sklearn.preprocessing import OneHotEncoder
 st.set_page_config(page_title="SHAP Explainability", layout="wide")
 st.title("🔍 SHAP Model Explainability")
 
-# --- File paths ---
 csv_path = "house_app_files/house_data_with_predictions.csv"
 pipeline_path = "house_app_files/best_pipeline.pkl"
 
-# --- Load CSV data ---
 @st.cache_data
 def load_data():
     return pd.read_csv(csv_path)
@@ -27,7 +25,6 @@ with open(pipeline_path, "rb") as f:
 preprocessor = model.named_steps['preprocessor']
 regressor = model.named_steps['regressor']
 
-# Features 
 num_cols = preprocessor.transformers_[0][2]
 cat_cols = preprocessor.transformers_[1][2]
 
@@ -36,30 +33,24 @@ X = df[num_cols.tolist() + cat_cols.tolist()]
 X_sample = X.sample(200, random_state=42)
 X_sample_transformed = preprocessor.transform(X_sample)
 
-# Convert sparse to dense 
 if hasattr(X_sample_transformed, "toarray"):
     X_sample_transformed = X_sample_transformed.toarray()
 
-#  SHAP Explainer 
-explainer = shap.Explainer(regressor, X_sample_transformed)
-shap_values = explainer(X_sample_transformed)
-
-# Feature names
-ohe = preprocessor.named_transformers_['cat']  # OneHotEncoder directly
+#  Feature names
+ohe = preprocessor.named_transformers_['cat']  # OneHotEncoder object
 feature_names = list(num_cols) + list(ohe.get_feature_names_out(cat_cols))
+
+# SHAP Explainer
+explainer = shap.LinearExplainer(regressor, X_sample_transformed, feature_dependence="independent")
+shap_values = explainer(X_sample_transformed)
 
 # SHAP Summary Plot
 st.subheader("📌 SHAP Summary Plot (Global Feature Importance)")
 fig_summary = plt.figure(figsize=(10, 6))
-shap.summary_plot(
-    shap_values.values,
-    X_sample_transformed,
-    feature_names=feature_names,
-    show=False
-)
+shap.summary_plot(shap_values, X_sample_transformed, feature_names=feature_names, show=False)
 st.pyplot(fig_summary)
 
-# SHAP Waterfall Plot for a single prediction 
+# SHAP Waterfall Plot (Single Prediction) 
 st.subheader("📌 SHAP Waterfall Plot (Single Prediction Explanation)")
 selected_idx = st.number_input(
     "Select a row index to explain:",
@@ -74,8 +65,14 @@ if hasattr(single_transformed, "toarray"):
     single_transformed = single_transformed.toarray()
 
 shap_single = explainer(single_transformed)
-shap_single.feature_names = feature_names
 
 fig_waterfall = plt.figure(figsize=(10, 6))
 shap.plots.waterfall(shap_single[0], show=False)
 st.pyplot(fig_waterfall)
+
+#  display original row and prediction
+st.subheader("🔹 Original Data and Predicted Price")
+st.write(single_row)
+pred_log = regressor.predict(single_transformed)[0]
+pred_price = np.expm1(pred_log)
+st.success(f"Predicted Sale Price: ${pred_price:,.0f}")
